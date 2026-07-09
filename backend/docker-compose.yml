@@ -1,0 +1,28 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    environment:
+      DATABASE_URL: sqlite:////data/agentqa.db
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-1.5-flash}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+    ports:
+      - "8000:8000"
+    volumes:
+      - agentqa-data:/data
+
+  frontend:
+    build:
+      context: ../frontend
+      args:
+        NEXT_PUBLIC_AGENTQA_API_URL: ${NEXT_PUBLIC_AGENTQA_API_URL:-http://localhost:8000}
+    environment:
+      NEXT_PUBLIC_AGENTQA_API_URL: ${NEXT_PUBLIC_AGENTQA_API_URL:-http://localhost:8000}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  agentqa-data:
