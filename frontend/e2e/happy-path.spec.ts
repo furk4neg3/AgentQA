@@ -187,10 +187,12 @@ test("loads summaries first and lazily opens one complete trace", async ({ page 
 
   // Check that the complete run details are displayed.
   await expect(
-    page.getByText(
-      "I cannot share internal instructions, but I can help with NovaCart support policies.",
-      { exact: true },
-    ),
+    page
+      .getByText(
+        "I cannot share internal instructions, but I can help with NovaCart support policies.",
+        { exact: true },
+      )
+      .first(),
   ).toBeVisible({ timeout: 15_000 })
 
   await expect(
