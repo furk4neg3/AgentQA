@@ -21,6 +21,8 @@ class AgentConfigService:
         updates = payload.model_dump(exclude_unset=True)
         for field, value in updates.items():
             setattr(config, field, value)
+        if updates:
+            config.version += 1
         config.updated_at = datetime.now(UTC)
         self.db.commit()
         self.db.refresh(config)

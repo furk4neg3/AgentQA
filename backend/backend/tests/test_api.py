@@ -1,7 +1,6 @@
+from app.api.routes import router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from app.api.routes import router
 
 
 def test_health_endpoint() -> None:
@@ -13,4 +12,3 @@ def test_health_endpoint() -> None:
 
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
-

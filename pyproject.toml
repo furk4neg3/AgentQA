@@ -1,0 +1,45 @@
+[project]
+name = "agentqa"
+version = "0.2.0"
+description = "A reproducible evaluation platform for tool-using AI agents"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["backend/backend"]
+testpaths = ["backend/backend/tests"]
+addopts = "-q --strict-markers"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["backend/backend/alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/backend/tests/*" = ["B008"]
+"backend/backend/app/api/routes.py" = ["B008"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["backend/backend/app"]
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+follow_imports = "skip"
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unreachable = true
+no_implicit_optional = true
+pretty = true
+
+[tool.coverage.run]
+source = ["backend/backend/app"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 80

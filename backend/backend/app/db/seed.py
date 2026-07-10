@@ -8,19 +8,34 @@ def seed_database(db: Session) -> None:
     """Idempotently seed NovaCart demo data."""
 
     for order_payload in ORDERS:
-        existing = db.query(Order).filter(Order.order_id == order_payload["order_id"]).one_or_none()
-        if existing is None:
+        existing_order = (
+            db.query(Order).filter(Order.order_id == order_payload["order_id"]).one_or_none()
+        )
+        if existing_order is None:
             db.add(Order(**order_payload))
 
     for doc_payload in POLICY_DOCUMENTS:
-        existing = db.query(PolicyDocument).filter(PolicyDocument.title == doc_payload["title"]).one_or_none()
-        if existing is None:
+        existing_document = (
+            db.query(PolicyDocument)
+            .filter(PolicyDocument.title == doc_payload["title"])
+            .one_or_none()
+        )
+        if existing_document is None:
             db.add(PolicyDocument(**doc_payload))
 
     for scenario_payload in SCENARIOS:
-        existing = db.query(Scenario).filter(Scenario.id == scenario_payload["id"]).one_or_none()
-        if existing is None:
-            db.add(Scenario(**scenario_payload))
+        existing_scenario = (
+            db.query(Scenario).filter(Scenario.id == scenario_payload["id"]).one_or_none()
+        )
+        if existing_scenario is None:
+            db.add(Scenario(source="novacart_seed", **scenario_payload))
+        elif not existing_scenario.evaluation_spec and scenario_payload.get("evaluation_spec"):
+            # Adopt the versioned spec for legacy seeded rows without overwriting
+            # user-edited scenarios that already have one.
+            existing_scenario.evaluation_spec = scenario_payload["evaluation_spec"]
+            existing_scenario.evaluation_spec_version = scenario_payload.get(
+                "evaluation_spec_version", "1.0"
+            )
 
     config = db.query(AgentConfigModel).filter(AgentConfigModel.id == 1).one_or_none()
     if config is None:
@@ -39,9 +54,7 @@ def seed_database(db: Session) -> None:
 
 
 def init_db_and_seed() -> None:
-    from app.db.session import Base, SessionLocal, engine
+    from app.db.session import get_session_factory
 
-    Base.metadata.create_all(bind=engine)
-    with SessionLocal() as db:
+    with get_session_factory()() as db:
         seed_database(db)
-

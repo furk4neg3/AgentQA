@@ -10,6 +10,11 @@ __v0_jsx-dev-runtime.ts
 .env*.local
 
 # Common ignores
-node_modules
+node_modules/
 .next/
+.pnpm-store/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
 .DS_Store

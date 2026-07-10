@@ -1,6 +1,6 @@
+import pytest
+from app.tools import ToolRuntime, ToolValidationError
 from sqlalchemy.orm import Session
-
-from app.tools import ToolRuntime
 
 
 def test_order_lookup_tool(db_session: Session) -> None:
@@ -30,3 +30,15 @@ def test_refund_policy_logic(db_session: Session) -> None:
     assert damaged["requires_escalation"] is True
     assert damaged["priority"] == "high"
 
+
+def test_provider_tool_dispatch_rejects_unknown_tools_and_invalid_arguments(
+    db_session: Session,
+) -> None:
+    tools = ToolRuntime(db_session)
+
+    with pytest.raises(ToolValidationError, match="not allowlisted"):
+        tools.execute("delete_customer", {})
+    with pytest.raises(ToolValidationError, match="Invalid arguments"):
+        tools.execute("lookup_order", {"order_id": "not-an-order", "extra": True})
+
+    assert tools.trace == []

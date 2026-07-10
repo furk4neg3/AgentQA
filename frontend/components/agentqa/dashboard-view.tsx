@@ -25,8 +25,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Button } from "@/components/ui/button"
 import { useAgentQA } from "@/lib/agentqa/store"
-import type { AgentRun } from "@/lib/agentqa/types"
-import { formatRelativeTime, scoreColor, SeverityBadge, StatusPill } from "./shared"
+import type { AgentRunSummary } from "@/lib/agentqa/types"
+import { formatRelativeTime, formatScore, scoreColor, SeverityBadge, StatusPill } from "./shared"
 
 interface Props {
   onOpenTrace: (runId: string) => void
@@ -95,12 +95,14 @@ export function DashboardView({ onOpenTrace, onNavigate }: Props) {
           </CardHeader>
           <CardContent>
             <ChartContainer
+              role="img"
+              aria-label="Pass rate by recent run batch. A tabular alternative follows."
               className="h-[220px] w-full"
               config={{
                 passRate: { label: "Pass rate", color: "var(--chart-1)" },
               }}
             >
-              <AreaChart data={trend} margin={{ left: -16, right: 8, top: 8 }}>
+              <AreaChart accessibilityLayer data={trend} margin={{ left: -16, right: 8, top: 8 }}>
                 <defs>
                   <linearGradient id="passFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="var(--color-passRate)" stopOpacity={0.35} />
@@ -135,6 +137,11 @@ export function DashboardView({ onOpenTrace, onNavigate }: Props) {
                 />
               </AreaChart>
             </ChartContainer>
+            <table className="sr-only">
+              <caption>Pass rate by recent run batch</caption>
+              <thead><tr><th>Batch</th><th>Pass rate</th></tr></thead>
+              <tbody>{trend.map((point) => <tr key={point.label}><td>{point.label}</td><td>{point.passRate}%</td></tr>)}</tbody>
+            </table>
           </CardContent>
         </Card>
 
@@ -145,10 +152,12 @@ export function DashboardView({ onOpenTrace, onNavigate }: Props) {
           </CardHeader>
           <CardContent>
             <ChartContainer
+              role="img"
+              aria-label="Average evaluation quality by dimension. A tabular alternative follows."
               className="mx-auto h-[220px] w-full"
               config={{ value: { label: "Avg score", color: "var(--chart-1)" } }}
             >
-              <RadarChart data={radar} outerRadius={80}>
+              <RadarChart accessibilityLayer data={radar} outerRadius={80}>
                 <PolarGrid stroke="var(--border)" />
                 <PolarAngleAxis dataKey="metric" fontSize={10} stroke="var(--muted-foreground)" />
                 <ChartTooltip content={<ChartTooltipContent />} />
@@ -161,6 +170,11 @@ export function DashboardView({ onOpenTrace, onNavigate }: Props) {
                 />
               </RadarChart>
             </ChartContainer>
+            <table className="sr-only">
+              <caption>Average evaluation quality by dimension</caption>
+              <thead><tr><th>Dimension</th><th>Average score</th></tr></thead>
+              <tbody>{radar.map((point) => <tr key={point.metric}><td>{point.metric}</td><td>{point.value}%</td></tr>)}</tbody>
+            </table>
           </CardContent>
         </Card>
       </div>
@@ -180,15 +194,15 @@ export function DashboardView({ onOpenTrace, onNavigate }: Props) {
               <button
                 key={run.id}
                 onClick={() => onOpenTrace(run.id)}
-                className="flex w-full items-center gap-3 px-6 py-3 text-left transition-colors hover:bg-accent/40"
+                className="flex w-full items-center gap-3 px-6 py-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
               >
-                <StatusPill passed={run.evaluation_result.passed} />
+                <StatusPill passed={run.evaluation_result.passed} outcome={run.evaluation_result.outcome} status={run.status} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{run.scenario_name ?? "Ad-hoc run"}</p>
                   <p className="truncate font-mono text-xs text-muted-foreground">{run.input}</p>
                 </div>
                 <div className="hidden items-center gap-6 sm:flex">
-                  <MiniStat label="score" value={run.evaluation_result.score.toFixed(2)} className={scoreColor(run.evaluation_result.score)} />
+                  <MiniStat label="score" value={formatScore(run.evaluation_result.score)} className={scoreColor(run.evaluation_result.score)} />
                   <MiniStat label="latency" value={`${run.latency_ms}ms`} />
                   <SeverityBadge severity={run.evaluation_result.severity} />
                 </div>
@@ -258,7 +272,7 @@ function MiniStat({ label, value, className }: { label: string; value: string; c
   )
 }
 
-function buildTrend(runs: AgentRun[]) {
+function buildTrend(runs: AgentRunSummary[]) {
   if (!runs.length) return []
   // Group chronologically into batches of the suite size (~10) for a trend line.
   const chronological = [...runs].sort((a, b) => +new Date(a.started_at) - +new Date(b.started_at))
@@ -266,25 +280,29 @@ function buildTrend(runs: AgentRun[]) {
   const points: { label: string; passRate: number }[] = []
   for (let i = 0; i < chronological.length; i += bucketSize) {
     const bucket = chronological.slice(i, i + bucketSize)
-    const passed = bucket.filter((r) => r.evaluation_result.passed).length
+    const evaluated = bucket.filter((run) => run.evaluation_result.passed !== null)
+    const passed = evaluated.filter((run) => run.evaluation_result.passed).length
     points.push({
       label: `#${Math.floor(i / bucketSize) + 1}`,
-      passRate: Math.round((passed / bucket.length) * 100),
+      passRate: evaluated.length ? Math.round((passed / evaluated.length) * 100) : 0,
     })
   }
   return points
 }
 
-function buildRadar(runs: AgentRun[]) {
-  const dims: [string, keyof AgentRun["evaluation_result"]][] = [
+function buildRadar(runs: AgentRunSummary[]) {
+  const dims: [string, keyof AgentRunSummary["evaluation_result"]][] = [
     ["Tools", "tool_call_correctness"],
     ["Policy", "policy_compliance"],
     ["Injection", "prompt_injection_resistance"],
     ["Grounding", "groundedness"],
   ]
   return dims.map(([metric, key]) => {
-    const avg = runs.length
-      ? runs.reduce((sum, r) => sum + (r.evaluation_result[key] as number), 0) / runs.length
+    const values = runs
+      .map((run) => run.evaluation_result[key])
+      .filter((value): value is number => typeof value === "number")
+    const avg = values.length
+      ? values.reduce((sum, value) => sum + value, 0) / values.length
       : 0
     return { metric, value: Math.round(avg * 100) }
   })

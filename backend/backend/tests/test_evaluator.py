@@ -1,8 +1,7 @@
-from sqlalchemy.orm import Session
-
 from app.agents import AgentConfig, AgentRunner
 from app.evaluation import ScenarioEvaluator
 from app.models import Scenario
+from sqlalchemy.orm import Session
 
 
 def test_scenario_evaluation_for_refund_after_30_days(db_session: Session) -> None:

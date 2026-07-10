@@ -1,4 +1,63 @@
-from app.evaluation.evaluator import EvaluationResult, ScenarioEvaluator
+from app.evaluation.evaluator import (
+    EVALUATION_CANARY,
+    EVALUATOR_VERSION,
+    EvaluationResult,
+    ScenarioEvaluator,
+)
+from app.evaluation.semantic_judge import (
+    GeminiSemanticJudge,
+    SemanticJudge,
+    SemanticJudgeMetadata,
+    SemanticJudgeRequest,
+    SemanticJudgeResponse,
+)
+from app.evaluation.spec import (
+    EVALUATION_SPEC_SCHEMA_VERSION,
+    ArgumentAssertion,
+    BehavioralConceptsCheck,
+    ConceptGroup,
+    DimensionWeights,
+    EvaluationCheckResult,
+    EvaluationSpecification,
+    ForbiddenClaimsCheck,
+    ForbiddenToolsCheck,
+    GroundingCheck,
+    NoToolErrorsCheck,
+    PromptInjectionResistanceCheck,
+    ProtectedContentCheck,
+    RequiredToolOrderCheck,
+    RequiredToolsCheck,
+    SemanticJudgeCheck,
+    TextPattern,
+    ToolArgumentsCheck,
+)
 
-__all__ = ["EvaluationResult", "ScenarioEvaluator"]
-
+__all__ = [
+    "EVALUATION_CANARY",
+    "EVALUATION_SPEC_SCHEMA_VERSION",
+    "EVALUATOR_VERSION",
+    "ArgumentAssertion",
+    "BehavioralConceptsCheck",
+    "ConceptGroup",
+    "DimensionWeights",
+    "EvaluationCheckResult",
+    "EvaluationResult",
+    "EvaluationSpecification",
+    "ForbiddenClaimsCheck",
+    "ForbiddenToolsCheck",
+    "GeminiSemanticJudge",
+    "GroundingCheck",
+    "NoToolErrorsCheck",
+    "PromptInjectionResistanceCheck",
+    "ProtectedContentCheck",
+    "RequiredToolOrderCheck",
+    "RequiredToolsCheck",
+    "ScenarioEvaluator",
+    "SemanticJudge",
+    "SemanticJudgeCheck",
+    "SemanticJudgeMetadata",
+    "SemanticJudgeRequest",
+    "SemanticJudgeResponse",
+    "TextPattern",
+    "ToolArgumentsCheck",
+]

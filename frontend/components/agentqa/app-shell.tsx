@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Activity, AlertTriangle, Bot, Layers, LayoutDashboard, Play, RefreshCw, ScrollText, Settings } from "lucide-react"
+import { Activity, AlertTriangle, Bot, Layers, LayoutDashboard, LibraryBig, Play, RefreshCw, ScrollText, Settings } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAgentQA } from "@/lib/agentqa/store"
 import { Button } from "@/components/ui/button"
@@ -10,14 +10,16 @@ import { RunnerView } from "./runner-view"
 import { BatchView } from "./batch-view"
 import { TracesView } from "./traces-view"
 import { SettingsView } from "./settings-view"
+import { LibraryView } from "./library-view"
 
-type ViewKey = "dashboard" | "runner" | "batch" | "traces" | "settings"
+type ViewKey = "dashboard" | "runner" | "batch" | "traces" | "library" | "settings"
 
 const NAV: { key: ViewKey; label: string; icon: typeof LayoutDashboard; hint: string }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, hint: "Overview & trends" },
   { key: "runner", label: "Scenario Runner", icon: Play, hint: "Run a single test" },
   { key: "batch", label: "Batch Evaluation", icon: Layers, hint: "Run the full suite" },
   { key: "traces", label: "Trace Viewer", icon: ScrollText, hint: "Inspect tool calls" },
+  { key: "library", label: "Scenario Library", icon: LibraryBig, hint: "Scenarios & suites" },
   { key: "settings", label: "Agent Settings", icon: Settings, hint: "Prompt & model config" },
 ]
 
@@ -50,10 +52,12 @@ export function AppShell() {
             const active = view === item.key
             return (
               <button
+                type="button"
                 key={item.key}
                 onClick={() => setView(item.key)}
+                aria-current={active ? "page" : undefined}
                 className={cn(
-                  "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors",
+                  "group flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   active
                     ? "bg-sidebar-accent text-sidebar-foreground"
                     : "text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
@@ -90,10 +94,12 @@ export function AppShell() {
         <div className="flex items-center gap-1 overflow-x-auto border-b border-border bg-card/40 px-3 py-2 md:hidden">
           {NAV.map((item) => (
             <button
+              type="button"
               key={item.key}
               onClick={() => setView(item.key)}
+              aria-current={view === item.key ? "page" : undefined}
               className={cn(
-                "flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm",
+                "flex items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                 view === item.key ? "bg-sidebar-accent text-foreground" : "text-muted-foreground",
               )}
             >
@@ -104,11 +110,14 @@ export function AppShell() {
         </div>
 
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          <div className="mb-5 rounded-lg border border-warning/25 bg-warning/5 px-4 py-2.5 text-xs text-muted-foreground">
+            Local development mode — this workspace is unauthenticated and must not be exposed publicly.
+          </div>
           {apiError && (
-            <div className="mb-5 flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">
+            <div role="alert" className="mb-5 flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-start gap-2">
                 <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                <span className="min-w-0 break-words">Backend connection failed: {apiError}</span>
+                <span className="min-w-0 break-words">{errorTitle(apiError.kind)}: {apiError.message}</span>
               </div>
               <Button
                 variant="outline"
@@ -126,9 +135,18 @@ export function AppShell() {
           {view === "runner" && <RunnerView onOpenTrace={openTrace} />}
           {view === "batch" && <BatchView onOpenTrace={openTrace} />}
           {view === "traces" && <TracesView focusRunId={focusRunId} />}
-          {view === "settings" && <SettingsView />}
+          {view === "library" && <LibraryView />}
+          {view === "settings" && <SettingsView key={config.updated_at} />}
         </main>
       </div>
     </div>
   )
+}
+
+function errorTitle(kind: string): string {
+  if (kind === "connection") return "Backend connection failed"
+  if (kind === "validation") return "Request validation failed"
+  if (kind === "provider") return "Model provider failed"
+  if (kind === "timeout") return "Backend request timed out"
+  return "AgentQA request failed"
 }

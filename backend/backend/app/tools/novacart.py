@@ -7,15 +7,21 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, TypeVar
 
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.agents.types import ToolCallRecord
 from app.models import Order, PolicyDocument
+from app.tools.schemas import TOOL_ARGUMENT_MODELS
 
 T = TypeVar("T")
 
 
 class ToolExecutionError(RuntimeError):
+    pass
+
+
+class ToolValidationError(ToolExecutionError):
     pass
 
 
@@ -51,7 +57,9 @@ class ToolRuntime:
             lambda: self._check_refund_policy(order_id),
         )
 
-    def create_support_ticket(self, order_id: str | None, summary: str, priority: str) -> dict[str, Any]:
+    def create_support_ticket(
+        self, order_id: str | None, summary: str, priority: str
+    ) -> dict[str, Any]:
         return self._record(
             "create_support_ticket",
             {"order_id": order_id, "summary": summary, "priority": priority},
@@ -72,9 +80,32 @@ class ToolRuntime:
                 "escalated": True,
                 "reason": reason,
                 "order_id": order_id,
-                "queue": "premium_escalations" if "premium" in reason.lower() else "support_escalations",
+                "queue": "premium_escalations"
+                if "premium" in reason.lower()
+                else "support_escalations",
             },
         )
+
+    def execute(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        """Validate a provider-requested call before dispatching to the allowlist."""
+
+        argument_model = TOOL_ARGUMENT_MODELS.get(tool_name)
+        if argument_model is None:
+            raise ToolValidationError(f"Tool is not allowlisted: {tool_name}")
+        try:
+            validated = argument_model.model_validate(arguments).model_dump()
+        except ValidationError as exc:
+            raise ToolValidationError(f"Invalid arguments for {tool_name}: {exc}") from exc
+
+        dispatch: dict[str, Callable[..., Any]] = {
+            "lookup_order": self.lookup_order,
+            "search_knowledge_base": self.search_knowledge_base,
+            "check_refund_policy": self.check_refund_policy,
+            "create_support_ticket": self.create_support_ticket,
+            "escalate_to_human": self.escalate_to_human,
+        }
+        output = dispatch[tool_name](**validated)
+        return output if isinstance(output, dict) else {"result": output}
 
     def _record(self, tool_name: str, input_payload: dict[str, Any], fn: Callable[[], T]) -> T:
         if len(self.trace) >= self.max_tool_calls:
@@ -205,7 +236,9 @@ def _tokens(text: str) -> set[str]:
 
 
 def _snippet(content: str, query_tokens: set[str]) -> str:
-    sentences = [sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", content) if sentence.strip()]
+    sentences = [
+        sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", content) if sentence.strip()
+    ]
     for sentence in sentences:
         if _tokens(sentence).intersection(query_tokens):
             return sentence

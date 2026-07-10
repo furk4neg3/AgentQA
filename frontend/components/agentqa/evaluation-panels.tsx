@@ -1,10 +1,10 @@
 "use client"
 
-import { useState } from "react"
-import { ChevronRight, Search, ShieldCheck, TriangleAlert, Wrench } from "lucide-react"
+import { useId, useState } from "react"
+import { Check, ChevronRight, Search, ShieldCheck, TriangleAlert, Wrench, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { TOOL_LABELS } from "@/lib/agentqa/seed"
-import type { EvaluationResult, RetrievedDocument, ToolCall } from "@/lib/agentqa/types"
+import { TOOL_LABELS } from "@/lib/agentqa/tool-labels"
+import type { EvaluationCheck, EvaluationResult, RetrievedDocument, ToolCall } from "@/lib/agentqa/types"
 import { formatTime } from "./shared"
 
 const METRICS: { key: keyof EvaluationResult; label: string }[] = [
@@ -24,17 +24,17 @@ export function MetricBars({ evaluation }: { evaluation: EvaluationResult }) {
   return (
     <div className="flex flex-col gap-4">
       {METRICS.map(({ key, label }) => {
-        const value = evaluation[key] as number
+        const value = evaluation[key] as number | null
         return (
           <div key={key}>
             <div className="mb-1.5 flex items-center justify-between text-sm">
               <span className="text-muted-foreground">{label}</span>
-              <span className="font-mono tabular-nums">{value.toFixed(2)}</span>
+              <span className="font-mono tabular-nums">{value === null ? "—" : value.toFixed(2)}</span>
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
               <div
-                className={cn("h-full rounded-full transition-all", barColor(value))}
-                style={{ width: `${Math.max(value * 100, 2)}%` }}
+                className={cn("h-full rounded-full transition-all", value === null ? "bg-muted" : barColor(value))}
+                style={{ width: value === null ? "0%" : `${Math.max(value * 100, 2)}%` }}
               />
             </div>
           </div>
@@ -68,6 +68,51 @@ export function FailureReasons({ reasons }: { reasons: string[] }) {
   )
 }
 
+export function EvaluationChecks({ checks }: { checks: EvaluationCheck[] }) {
+  if (!checks.length) {
+    return (
+      <p className="rounded-lg border border-dashed border-border px-3 py-5 text-center text-sm text-muted-foreground">
+        No structured check results were recorded for this run.
+      </p>
+    )
+  }
+  return (
+    <ul className="flex flex-col gap-2" aria-label="Structured evaluation checks">
+      {checks.map((check) => (
+        <li
+          key={check.check_id}
+          className={cn(
+            "rounded-lg border px-3 py-3",
+            check.passed ? "border-success/25 bg-success/5" : "border-destructive/30 bg-destructive/10",
+          )}
+        >
+          <div className="flex items-start gap-2.5">
+            {check.passed ? (
+              <Check className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
+            ) : (
+              <X className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-medium">{check.label}</p>
+                {check.hard_failure && !check.passed && (
+                  <span className="rounded-full border border-destructive/30 bg-destructive/10 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide text-destructive">
+                    Hard failure
+                  </span>
+                )}
+                <span className="ml-auto font-mono text-[11px] text-muted-foreground">
+                  {check.contribution.toFixed(2)} / {check.max_contribution.toFixed(2)}
+                </span>
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{check.evidence}</p>
+            </div>
+          </div>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 export function ToolTrace({ toolCalls }: { toolCalls: ToolCall[] }) {
   if (!toolCalls.length) {
     return (
@@ -79,7 +124,7 @@ export function ToolTrace({ toolCalls }: { toolCalls: ToolCall[] }) {
   return (
     <ol className="flex flex-col gap-2">
       {toolCalls.map((call, i) => (
-        <ToolCallItem key={call.id} call={call} index={i} />
+        <ToolCallItem key={`${call.id ?? "call"}-${call.tool_name}-${i}`} call={call} index={i} />
       ))}
     </ol>
   )
@@ -87,11 +132,15 @@ export function ToolTrace({ toolCalls }: { toolCalls: ToolCall[] }) {
 
 function ToolCallItem({ call, index }: { call: ToolCall; index: number }) {
   const [open, setOpen] = useState(false)
+  const contentId = `tool-call-${useId().replace(/:/g, "")}`
   return (
     <li className="overflow-hidden rounded-lg border border-border bg-card">
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-accent/40"
+        aria-expanded={open}
+        aria-controls={contentId}
+        className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
         <span className="flex size-6 items-center justify-center rounded-md bg-muted font-mono text-xs text-muted-foreground">
           {index + 1}
@@ -107,7 +156,7 @@ function ToolCallItem({ call, index }: { call: ToolCall; index: number }) {
         <ChevronRight className={cn("size-4 text-muted-foreground transition-transform", open && "rotate-90")} />
       </button>
       {open && (
-        <div className="grid gap-3 border-t border-border px-3 py-3 sm:grid-cols-2">
+        <div id={contentId} className="grid gap-3 border-t border-border px-3 py-3 sm:grid-cols-2">
           <div>
             <p className="mb-1 font-mono text-[11px] uppercase tracking-wide text-muted-foreground">Input</p>
             <pre className="overflow-x-auto rounded-md bg-muted/60 p-2.5 font-mono text-xs text-foreground">
@@ -120,6 +169,11 @@ function ToolCallItem({ call, index }: { call: ToolCall; index: number }) {
               {JSON.stringify(call.output, null, 2)}
             </pre>
           </div>
+          {call.error && (
+            <p className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive sm:col-span-2">
+              Tool error: {call.error}
+            </p>
+          )}
         </div>
       )}
     </li>

@@ -5,10 +5,23 @@
 __pycache__/
 *.py[cod]
 *.db
+*.sqlite
+*.sqlite3
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
 
 node_modules/
+.pnpm-store/
 .next/
 dist/
 build/
 coverage/
 *.tsbuildinfo
+.DS_Store
+*.log
+agentqa-source-*.tar.gz

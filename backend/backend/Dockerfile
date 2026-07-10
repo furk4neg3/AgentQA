@@ -1,16 +1,27 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY backend/backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app ./app
+COPY alembic.ini ./alembic.ini
+COPY backend/backend/alembic ./alembic
+COPY backend/backend/app ./app
+
+RUN addgroup --system agentqa \
+    && adduser --system --ingroup agentqa agentqa \
+    && mkdir -p /data \
+    && chown -R agentqa:agentqa /app /data
+
+USER agentqa
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=5 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"
 
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]

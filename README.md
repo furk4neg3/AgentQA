@@ -1,429 +1,249 @@
 # AgentQA
 
-AgentQA is a production-style QA, regression-testing, and observability workbench for tool-using AI support agents. It simulates realistic customer-support scenarios, runs an agent against seeded business data, records every tool call, evaluates the result with rule-based checks, and displays run quality through a product-style dashboard.
+AgentQA is a reproducible evaluation and regression-testing platform for tool-using AI agents. It keeps the polished NovaCart support demo, while making the backend the source of truth for execution, tool traces, evaluation, metrics, batches, scenarios, suites, and CI exports.
 
-The demo domain is **NovaCart**, a mock e-commerce company with refund policies, orders, support-tool workflows, prompt-injection scenarios, and policy-compliance checks.
+The default mode is deterministic and makes no external model request. Gemini execution is optional and uses the supported `google-genai` SDK with manual function calling through an allowlisted target adapter.
 
-## Why this project exists
+> **Security notice:** the built-in unauthenticated mode is for local development only. Add real authentication, authorization, tenancy controls, and production secret management before exposing AgentQA publicly.
+>
+> If a Gemini key was ever placed in a shared or committed `.env`, rotate that key manually. Removing the file does not revoke an exposed credential.
 
-AI agents can appear correct while failing in subtle but important ways. A customer-support agent might skip policy lookup, approve an ineligible refund, leak hidden instructions, ignore missing information, or fail to escalate a damaged-item case. AgentQA provides a repeatable harness for testing these behaviors before an agent reaches production.
+## What is included
 
-This project is designed to demonstrate practical agentic AI engineering skills:
-
-- Tool orchestration
-- Deterministic fallback behavior
-- Optional LLM provider integration
-- Agent trace logging
-- Scenario-based regression testing
-- Policy-grounded evaluation
-- Prompt-injection resistance checks
-- Full-stack product implementation
-
-## Features
-
-- **Scenario runner** for individual agent QA tests.
-- **Batch evaluation** for running the full seeded regression suite.
-- **Trace viewer** for inspecting every tool call, input, output, latency, and error.
-- **Dashboard** with pass rate, total runs, critical failures, average latency, recent runs, and evaluation charts.
-- **Rule-based evaluator** that scores runs across:
-  - Tool-call correctness
-  - Policy compliance
-  - Prompt-injection resistance
-  - Groundedness
-- **NovaCart mock tools** for:
-  - Order lookup
-  - Refund-policy checking
-  - Knowledge-base search
-  - Human escalation
-  - Support-ticket creation
-- **Seeded demo data** including orders, policy documents, and regression scenarios.
-- **Configurable agent settings** for agent name, system prompt, model mode, temperature, and max tool calls.
-- **Mock-first execution** with no external API key required.
-- **Optional Gemini mode** when a `GEMINI_API_KEY` is configured.
-- **SQLite persistence** for runs, traces, scenarios, orders, policies, and agent configuration.
-- **FastAPI backend** and **Next.js frontend**.
-- **Docker Compose** support for local full-stack startup.
+- Versioned Pydantic evaluation specifications with structured check evidence.
+- Required/forbidden tools, order and argument assertions, tool-error checks, behavioral concept groups, forbidden claims, grounding, protected-content canaries, hard failures, and configurable pass thresholds.
+- Deterministic mock and Gemini providers with typed responses, usage, latency, errors, bounded transient retries, explicit fallback, and real function-calling loops.
+- Run snapshots for the scenario, evaluation specification, agent configuration, model, prompt hash/version, tool definitions, provider/evaluator versions, input source, usage, cost, errors, and fallback reason.
+- Persistent batches, repetitions, partial-failure visibility, baseline comparison deltas, scenario suites, JSON export, and JUnit export.
+- Paginated and filtered run APIs, SQL-backed all-time metrics, lazy trace loading, request cancellation/timeouts, accessible result rows and disclosures, and structured evaluation panels.
+- NovaCart as the included target adapter, isolated from the general runner/evaluator so another target can be added later.
+- Alembic migrations, root-level Python tooling, frontend lint/tests/type checking/build scripts, Docker health checks, GitHub Actions, secret scanning, and tracked-file source packaging.
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    User[User] --> UI[Next.js Frontend]
-    UI --> API[FastAPI Backend]
-    API --> Runner[AgentRunner]
-    Runner --> Tools[NovaCart Tools]
-    Runner --> Mock[Deterministic Mock Agent]
-    Runner --> Gemini[Optional Gemini Composer]
-    Tools --> DB[(SQLite)]
-    API --> Evaluator[Rule-Based Evaluator]
-    Evaluator --> DB
-    API --> DB
+```text
+Next.js UI
+    │
+    ▼
+FastAPI API ── RunService ── AgentRunner ── Provider
+    │                         │                ├─ deterministic mock
+    │                         │                └─ Gemini / google-genai
+    │                         ▼
+    │                    TargetAdapter
+    │                         └─ NovaCart tools
+    ▼
+ScenarioEvaluator ── optional separately configured semantic judge
+    │
+    ▼
+SQLAlchemy + Alembic + SQLite
 ```
 
-## Tech stack
+Only observable messages, validated function calls and arguments, tool results, timings, usage, and errors are stored. Hidden chain-of-thought is neither requested nor persisted. Protected system-prompt content is represented by a hash/version in normal traces and exports.
+
+## Repository layout
+
+```text
+.
+├── alembic.ini
+├── backend/
+│   ├── .env.example
+│   └── backend/
+│       ├── alembic/
+│       ├── app/
+│       │   ├── agents/       # runner, providers, target adapter
+│       │   ├── api/          # FastAPI routes
+│       │   ├── evaluation/   # typed specs, evaluator, semantic judge
+│       │   ├── models/       # persistence models
+│       │   ├── services/     # runs, reports, scenarios, suites, redaction
+│       │   └── tools/        # NovaCart tool schemas/runtime
+│       ├── tests/
+│       ├── requirements.txt
+│       └── requirements-dev.txt
+├── frontend/
+│   ├── app/
+│   ├── components/agentqa/
+│   ├── e2e/
+│   ├── lib/agentqa/
+│   └── package.json
+├── compose.yaml
+├── pyproject.toml
+└── scripts/package-source.sh
+```
+
+## Prerequisites
+
+- Python 3.11 or newer
+- Node.js 22 or newer
+- Corepack and pnpm 10.12.2
+- Docker with Compose, optional
+
+## Local development
 
 ### Backend
 
-- Python 3.11+
-- FastAPI
-- SQLAlchemy
-- SQLite
-- Pydantic
-- pytest
-- Optional Google Gemini adapter
+Run from the repository root:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate                 # Windows PowerShell: .venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r backend/backend/requirements-dev.txt
+cp backend/.env.example backend/.env
+alembic upgrade head
+uvicorn app.main:app --app-dir backend/backend --reload --port 8000
+```
+
+The default database location is predictable and independent of the working directory:
+
+```text
+backend/data/agentqa.db
+```
+
+The API is available at `http://localhost:8000`; its health endpoint is `GET /health`.
 
 ### Frontend
 
-- Next.js
-- React
-- TypeScript
-- Tailwind CSS
-- shadcn-style UI components
-- Recharts
-- pnpm
-
-### Infrastructure
-
-- Docker
-- Docker Compose
-
-## Project structure
-
-```text
-AgentQA/
-├── backend/
-│   ├── backend/
-│   │   ├── app/
-│   │   │   ├── agents/          # Agent runner, model adapter, agent types
-│   │   │   ├── api/             # FastAPI routes
-│   │   │   ├── core/            # App configuration
-│   │   │   ├── db/              # SQLAlchemy session and seeding
-│   │   │   ├── evaluation/      # Rule-based evaluator
-│   │   │   ├── models/          # Database models
-│   │   │   ├── schemas/         # API schemas
-│   │   │   ├── seed/            # Demo orders, policies, scenarios
-│   │   │   ├── services/        # Run and config services
-│   │   │   ├── tools/           # NovaCart business tools
-│   │   │   └── main.py          # FastAPI app entrypoint
-│   │   ├── tests/               # Backend test suite
-│   │   ├── Dockerfile
-│   │   └── requirements.txt
-│   ├── frontend/                # Optional Streamlit prototype UI
-│   ├── docker-compose.yml
-│   ├── pytest.ini
-│   └── .env.example
-├── frontend/
-│   ├── app/                     # Next.js app router pages
-│   ├── components/agentqa/       # Product UI views
-│   ├── components/ui/            # Shared UI components
-│   ├── lib/agentqa/              # API client, state store, types, seed labels
-│   ├── Dockerfile
-│   ├── package.json
-│   └── .env.example
-└── README.md
-```
-
-## Getting started
-
-### Prerequisites
-
-Install the following before running the project locally:
-
-- Python 3.11+
-- Node.js 22+
-- pnpm
-- Docker and Docker Compose, optional but recommended
-
-## Local development setup
-
-### 1. Backend
-
-From the repository root:
+In another terminal, from the repository root:
 
 ```bash
-cd backend
-cp .env.example .env
-cd backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
-
-The backend starts at:
-
-```text
-http://localhost:8000
-```
-
-Health check:
-
-```bash
-curl http://localhost:8000/health
-```
-
-Expected response:
-
-```json
-{
-  "status": "ok",
-  "service": "AgentQA Cloud"
-}
-```
-
-### 2. Frontend
-
-Open a second terminal from the repository root:
-
-```bash
+corepack enable
+corepack prepare pnpm@10.12.2 --activate
 cd frontend
 cp .env.example .env.local
-pnpm install
+pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-The frontend starts at:
+The UI is available at `http://localhost:3000` and defaults to `http://localhost:8000` for the API.
 
-```text
-http://localhost:3000
-```
+## Docker Compose
 
-The frontend reads the backend URL from:
-
-```env
-NEXT_PUBLIC_AGENTQA_API_URL=http://localhost:8000
-```
-
-## Docker setup
-
-The Docker Compose file lives under the `backend/` directory.
-
-From the repository root:
+Run from the repository root:
 
 ```bash
-cd backend
-cp .env.example .env
-docker compose up --build
+cp backend/.env.example backend/.env
+docker compose --env-file backend/.env up --build
 ```
 
-Services:
+Compose runs migrations before the API starts, persists SQLite under the `agentqa-data` volume, and waits for the backend health check before starting the frontend.
 
-| Service | URL |
+## Environment configuration
+
+The distributable repository contains only sanitized `.env.example` files. Never commit a populated `.env`.
+
+Important backend variables:
+
+| Variable | Purpose |
 | --- | --- |
-| Backend API | `http://localhost:8000` |
-| Next.js frontend | `http://localhost:3000` |
+| `DATABASE_URL` | Optional SQLAlchemy URL; defaults to `backend/data/agentqa.db`. |
+| `GEMINI_API_KEY` | Credential for the tested Gemini agent. Leave empty for mock mode. |
+| `GEMINI_MODEL` | Tested-agent Gemini model. |
+| `GEMINI_INPUT_COST_PER_MILLION` | Configurable input-token pricing metadata. |
+| `GEMINI_OUTPUT_COST_PER_MILLION` | Configurable output-token pricing metadata. |
+| `SEMANTIC_JUDGE_PROVIDER` | `disabled` by default, or `gemini`. |
+| `SEMANTIC_JUDGE_API_KEY` | Separate credential used only by the optional judge. |
+| `SEMANTIC_JUDGE_MODEL` | Judge model, independently configured from the tested agent. |
+| `SEMANTIC_JUDGE_TIMEOUT_SECONDS` | Judge request timeout. |
+| `CORS_ORIGINS` | Explicit comma-separated frontend origins. |
+| `CORS_ALLOW_CREDENTIALS` | Must remain false when wildcard origins are used. |
+| `TRACE_REDACT_KEYS` | Additional case-insensitive keys removed from traces/exports. |
+| `AUTHENTICATION_MODE` | The included value is `local-development-only`. |
 
-Docker uses a named volume, `agentqa-data`, for SQLite persistence.
+The deterministic evaluator remains the default test path. A scenario that contains a required semantic-judge check fails with an explicit evaluation error when no independent judge is configured; AgentQA never invents a semantic result.
 
-## Environment variables
+## Execution modes
 
-### Backend
+- **Scenario:** executes the immutable stored scenario input against its stored evaluation specification.
+- **Mutation:** executes an edited input and evaluates that actual edited input against the selected scenario specification.
+- **Ad hoc:** executes arbitrary input. It is `not_evaluated` unless an evaluation-specification scenario is explicitly selected.
 
-Create `backend/.env` from `backend/.env.example`:
-
-```env
-DATABASE_URL=sqlite:///./agentqa.db
-GEMINI_API_KEY=
-GEMINI_MODEL=gemini-1.5-flash
-CORS_ORIGINS=*
-```
-
-| Variable | Description |
-| --- | --- |
-| `DATABASE_URL` | SQLAlchemy database URL. Defaults to local SQLite. |
-| `GEMINI_API_KEY` | Optional Gemini API key. Leave empty to use mock mode. |
-| `GEMINI_MODEL` | Gemini model name used when Gemini mode is enabled. |
-| `CORS_ORIGINS` | Allowed frontend origins. Use `*` for local development. |
-
-### Frontend
-
-Create `frontend/.env.local` from `frontend/.env.example`:
-
-```env
-NEXT_PUBLIC_AGENTQA_API_URL=http://localhost:8000
-```
-
-## How it works
-
-1. The user chooses a seeded scenario or submits an ad-hoc input.
-2. The frontend sends a run request to the FastAPI backend.
-3. `AgentRunner` executes the NovaCart support-agent flow.
-4. The runner calls mock business tools when needed.
-5. Each tool call is recorded with input, output, timestamps, latency, and errors.
-6. The agent produces a final customer-facing answer.
-7. `ScenarioEvaluator` scores the answer against the expected scenario behavior.
-8. The run, evaluation result, retrieved documents, and tool traces are saved to SQLite.
-9. The dashboard and trace viewer make the run inspectable from the UI.
-
-## Seeded scenarios
-
-The project includes regression scenarios such as:
-
-- Refund within 30 days for a physical product
-- Refund request after the 30-day policy window
-- Refund request for a digital product
-- Damaged physical item escalation
-- Missing order ID
-- Prompt injection requesting automatic refund approval
-- Premium customer with damaged item
-- User asking for internal system prompt
-- General refund-policy question
-- Invalid order ID
+Provider execution can end as `completed`, `degraded`, `failed`, or `cancelled`. A degraded run indicates a real configured fallback occurred or evaluation infrastructure failed after provider execution. Provider failures are persisted rather than escaping as an unrecorded HTTP 500.
 
 ## Evaluation model
 
-Each scenario can define:
+Each run stores the exact evaluation-specification snapshot and evaluator version. Checks return:
 
-- Required tool calls
-- Forbidden answer phrases
-- Expected behavior
-- Severity level
+- check ID and label;
+- pass/fail state;
+- earned and maximum numeric contribution;
+- dimension;
+- hard-failure flag;
+- concise evidence.
 
-The evaluator produces scores for:
+The dashboard dimensions—tool-call correctness, policy compliance, prompt-injection resistance, and groundedness—are derived from these checks. Text checks normalize case, punctuation, Unicode apostrophes, and contractions, and use practical negation handling so a phrase such as `not eligible` is not treated as the positive claim `eligible`.
 
-| Metric | Purpose |
-| --- | --- |
-| Tool-call correctness | Checks whether required tools were called. |
-| Policy compliance | Checks whether the answer follows NovaCart policy. |
-| Prompt-injection resistance | Checks whether the agent refused unsafe hidden-instruction requests. |
-| Groundedness | Checks whether the answer is supported by policy or tool output. |
+Prompt leakage is a hard failure only when the provider-only canary or genuinely protected content is disclosed. Merely mentioning phrases such as “system prompt” or “hidden developer instructions” is not itself leakage.
 
-A run passes when the weighted score is high enough and required behavioral checks are satisfied.
+## Database migrations
 
-## API endpoints
-
-| Method | Endpoint | Description |
-| --- | --- | --- |
-| `GET` | `/health` | Backend health check |
-| `GET` | `/scenarios` | List seeded scenarios |
-| `POST` | `/runs` | Run one scenario or ad-hoc input |
-| `POST` | `/runs/batch` | Run multiple scenarios or the full suite |
-| `GET` | `/runs` | List recent runs |
-| `GET` | `/runs/{run_id}` | Get a run with evaluation and tool traces |
-| `GET` | `/metrics/summary` | Get dashboard summary metrics |
-| `GET` | `/agent-config` | Read current agent configuration |
-| `PUT` | `/agent-config` | Update agent configuration |
-
-## Example API usage
-
-Run a seeded scenario:
+Migrations are mandatory for schema evolution; application startup does not call `create_all` to alter an existing database.
 
 ```bash
-curl -X POST http://localhost:8000/runs \
-  -H "Content-Type: application/json" \
-  -d '{"scenario_id":"refund_within_30_days"}'
+alembic upgrade head
+alembic current
+alembic history
 ```
 
-Run an ad-hoc input:
+Included revisions:
 
-```bash
-curl -X POST http://localhost:8000/runs \
-  -H "Content-Type: application/json" \
-  -d '{"input":"I want a refund for order ORD-1001."}'
-```
+- `0001_legacy_baseline` — creates or adopts the recognized pre-migration AgentQA schema.
+- `0002_production_platform` — adds structured evaluation snapshots/checks, provider metadata, reproducible run fields, persistent batches, suites, indexes, and legacy-data backfills.
 
-Run the full regression suite:
+## Verification
 
-```bash
-curl -X POST http://localhost:8000/runs/batch \
-  -H "Content-Type: application/json" \
-  -d '{}'
-```
-
-## Running tests
+### Backend
 
 From the repository root:
 
 ```bash
-cd backend
+python -m pip install -r backend/backend/requirements-dev.txt
 pytest
+pytest --cov=backend/backend/app --cov-report=term-missing
+ruff check backend/backend/app backend/backend/tests
+ruff format --check backend/backend/app backend/backend/tests
+mypy
 ```
 
-The test suite covers:
+Tests force `ENVIRONMENT=test`, clear provider credentials, use isolated databases, and monkeypatch socket connections so a real Gemini request cannot occur.
 
-- API health checks
-- Scenario execution
-- Refund-policy behavior
-- Tool behavior
-- Evaluator scoring
-- Prompt-injection resistance
-- Missing-order-ID handling
+### Frontend
 
-## UI walkthrough
+```bash
+cd frontend
+pnpm install --frozen-lockfile
+pnpm lint
+pnpm test
+pnpm typecheck
+pnpm build
+pnpm exec playwright install chromium
+pnpm test:e2e
+```
 
-### Dashboard
+The component tests cover structured disclosures and lazy run-detail loading. The small Playwright happy path verifies that the initial run list does not trigger one detail request per row.
 
-Shows high-level QA health: pass rate, total runs, critical failures, average latency, recent runs, score trends, and quality breakdowns.
+## API highlights
 
-### Scenario Runner
+- `GET /health`
+- `GET|POST /scenarios`, scenario update/duplicate/archive/restore/delete, JSON import/export
+- `GET|POST /suites`, suite update/archive/restore/delete, baseline selection
+- `POST /runs` for scenario, mutation, and ad-hoc execution
+- `GET /runs` with page-based pagination and server-side filters
+- `GET /runs/{id}` and `GET /runs/{id}/export`
+- `POST /batches`, `GET /batches`, `GET /batches/{id}`, cancellation and comparison
+- `GET /batches/{id}/export` and `GET /batches/{id}/export/junit`
+- `GET /metrics/summary`
+- `GET|PUT /agent-config`
 
-Runs a single seeded scenario or custom ad-hoc input and displays the generated answer, score, failure reasons, retrieved documents, and tool calls.
+Interactive API documentation is available at `/docs` in local development.
 
-### Batch Evaluation
+## Safe source packaging
 
-Runs the seeded regression suite and reports aggregate pass rate, average score, and individual scenario results.
+After reviewing and committing the intended changes:
 
-### Trace Viewer
+```bash
+./scripts/package-source.sh
+```
 
-Shows previous runs with detailed tool-call traces, including inputs and outputs for each tool call.
+The script packages only tracked files with `git archive`, refuses a dirty tree, and refuses tracked `.env`, database, `.DS_Store`, or TypeScript build-info artifacts. CI also runs Gitleaks.
 
-### Agent Settings
-
-Lets the user configure agent name, system prompt, model mode, temperature, and maximum tool calls.
-
-## Gemini mode
-
-By default, AgentQA works without any external LLM provider by using the deterministic mock agent.
-
-To enable Gemini-backed answer composition:
-
-1. Add a Gemini key to `backend/.env`:
-
-   ```env
-   GEMINI_API_KEY=your_api_key_here
-   GEMINI_MODEL=gemini-1.5-flash
-   ```
-
-2. Start the backend.
-3. Open the frontend.
-4. Go to **Agent Settings**.
-5. Change `model_mode` from `mock` to `gemini`.
-
-If Gemini is unavailable, the backend falls back to the deterministic mock behavior.
-
-## Current limitations
-
-- The demo domain is intentionally small and uses seeded NovaCart data.
-- The evaluator is rule-based rather than model-graded.
-- Authentication and multi-tenant workspaces are not implemented yet.
-- SQLite is used for local persistence and demo simplicity.
-- The current LLM provider adapter is Gemini-only.
-
-## Roadmap
-
-- Add custom scenario creation from the UI.
-- Add scenario import/export as JSON or YAML.
-- Add CI regression gates for agent releases.
-- Add provider adapters for OpenAI, Anthropic, and local models.
-- Add richer policy-document ingestion and retrieval.
-- Add workspace/team authentication.
-- Add historical trend reports by scenario and severity.
-- Add exportable QA reports for release reviews.
-- Add evaluator plugins for domain-specific checks.
-
-## Portfolio value
-
-AgentQA is a strong portfolio project because it looks beyond simple chatbot demos. It shows how to build the surrounding engineering system required to test, evaluate, observe, and safely iterate on tool-using agents.
-
-It demonstrates:
-
-- Backend API design
-- Frontend product design
-- Database modeling
-- Agent-tool integration
-- Deterministic testing strategy
-- Trace-first observability
-- Policy-grounded agent behavior
-- Prompt-injection evaluation
-- Dockerized local deployment
-- Automated backend tests
+Before sharing any manual archive, remove local secrets, databases, caches, build outputs, local pnpm stores, and macOS metadata. Rotating an exposed provider key remains a separate manual action.
