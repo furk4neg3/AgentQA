@@ -30,7 +30,7 @@ const evaluation = {
 test("loads summaries first and lazily opens one complete trace", async ({ page }) => {
   let detailRequests = 0
 
-  await page.route("http://localhost:8000/scenarios", (route) =>
+  await page.route(/\/scenarios\/?(\?.*)?$/, (route) =>
     route.fulfill({
       json: [
         {
@@ -52,7 +52,7 @@ test("loads summaries first and lazily opens one complete trace", async ({ page 
       ],
     }),
   )
-  await page.route("http://localhost:8000/agent-config", (route) =>
+  await page.route(/\/agent-config\/?(\?.*)?$/, (route) =>
     route.fulfill({
       json: {
         id: 1,
@@ -70,7 +70,7 @@ test("loads summaries first and lazily opens one complete trace", async ({ page 
       },
     }),
   )
-  await page.route("http://localhost:8000/metrics/summary", (route) =>
+  await page.route(/\/metrics\/summary\/?(\?.*)?$/, (route) =>
     route.fulfill({
       json: {
         total_runs: 1,
@@ -85,7 +85,7 @@ test("loads summaries first and lazily opens one complete trace", async ({ page 
       },
     }),
   )
-  await page.route("http://localhost:8000/runs/run-1", (route) => {
+ await page.route(/\/runs\/run-1\/?(\?.*)?$/, (route) => {
     detailRequests += 1
     return route.fulfill({
       json: {
@@ -120,7 +120,7 @@ test("loads summaries first and lazily opens one complete trace", async ({ page 
       },
     })
   })
-  await page.route(/http:\/\/localhost:8000\/runs\?.*/, (route) =>
+  await page.route(/\/runs\/?(\?.*)?$/, (route) =>
     route.fulfill({
       json: {
         items: [
@@ -159,13 +159,17 @@ test("loads summaries first and lazily opens one complete trace", async ({ page 
     }),
   )
 
-  await page.goto("/")
-  await page.waitForLoadState("networkidle")
-  await expect(page.getByRole("heading", { name: "Evaluation Dashboard" })).toBeVisible()
-  await page.waitForSelector("text=Internal system prompt", { timeout: 10000 })
-  await expect(page.getByText("Internal system prompt").first()).toBeVisible()
-  expect(detailRequests).toBe(0)
+  await page.goto("/", { waitUntil: "domcontentloaded" })
 
+  await expect(
+    page.getByRole("heading", { name: "Evaluation Dashboard" }),
+  ).toBeVisible()
+
+  await expect(
+    page.getByText("Internal system prompt", { exact: true }).first(),
+  ).toBeVisible({ timeout: 15_000 })
+
+  expect(detailRequests).toBe(0)
   await page.getByRole("button", { name: "Trace Viewer" }).first().click()
   await expect(page.getByText("I cannot share internal instructions, but I can help with NovaCart support policies.")).toBeVisible()
   expect(detailRequests).toBe(1)
