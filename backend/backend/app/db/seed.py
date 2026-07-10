@@ -1,7 +1,7 @@
+from collections.abc import Mapping
 from datetime import timedelta
 
 from sqlalchemy.orm import Session
-from collections.abc import Mapping
 
 from app.models import AgentConfigModel, Order, PolicyDocument, Scenario
 from app.seed.data import (
