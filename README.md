@@ -12,9 +12,6 @@ It lets you run individual scenarios or complete test suites, inspect validated 
 
 The repository includes **NovaCart**, a realistic customer-support demo target. Execution and evaluation are separated from the NovaCart domain so additional agent targets can be added later.
 
-> [!WARNING]
-> AgentQA currently runs in an unauthenticated local-development mode. Add authentication, authorization, tenancy isolation, production secret management, and a production-grade database before exposing it publicly.
-
 ## Why AgentQA?
 
 Testing an AI agent requires more than checking whether its final answer contains the correct sentence.
