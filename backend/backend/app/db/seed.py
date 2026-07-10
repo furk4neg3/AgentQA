@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from sqlalchemy.orm import Session
+from collections.abc import Mapping
 
 from app.models import AgentConfigModel, Order, PolicyDocument, Scenario
 from app.seed.data import (
@@ -79,7 +80,7 @@ def seed_database(db: Session) -> None:
 
 
 def _should_refresh_managed_scenario(
-    existing: Scenario, scenario_payload: dict[str, object]
+    existing: Scenario, scenario_payload: Mapping[str, object]
 ) -> bool:
     """Upgrade untouched built-in scenarios without overwriting user-owned copies."""
 
