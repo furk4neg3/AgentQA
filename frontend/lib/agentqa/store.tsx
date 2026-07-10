@@ -172,9 +172,24 @@ export function AgentQAProvider({ children }: { children: React.ReactNode }) {
       setDetailErrors((current) => ({ ...current, [id]: undefined }))
       const pending = fetchRun(id, { signal: options.signal })
         .then((run) => {
-          setRunDetails((current) => ({ ...current, [id]: run }))
-          setRuns((current) => [run, ...current.filter((item) => item.id !== id)])
-          return run
+          const namedRun = scenarioNames([run], scenarios)[0]
+          const currentSummary = runs.find((item) => item.id === id)
+          const enrichedRun = {
+            ...namedRun,
+            scenario_name: namedRun.scenario_name ?? currentSummary?.scenario_name ?? null,
+          }
+          setRunDetails((current) => ({ ...current, [id]: enrichedRun }))
+          setRuns((current) =>
+            current.map((item) =>
+              item.id === id
+                ? {
+                    ...enrichedRun,
+                    scenario_name: enrichedRun.scenario_name ?? item.scenario_name,
+                  }
+                : item,
+            ),
+          )
+          return enrichedRun
         })
         .catch((error) => {
           const apiError = toApiError(error)
@@ -192,7 +207,7 @@ export function AgentQAProvider({ children }: { children: React.ReactNode }) {
       inFlightDetails.current = new Map(inFlightDetails.current).set(id, pending)
       return pending
     },
-    [runDetails],
+    [runDetails, runs, scenarios],
   )
 
   const runOnce = useCallback(

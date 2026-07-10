@@ -188,6 +188,7 @@ class ToolCallRead(BaseModel):
 class AgentRunRead(BaseModel):
     id: str
     scenario_id: str | None
+    scenario_name: str | None = None
     evaluation_spec_scenario_id: str | None = None
     batch_id: str | None = None
     repetition_index: int = 0

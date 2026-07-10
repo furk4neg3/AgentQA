@@ -21,7 +21,19 @@ _CONTRACTIONS = {
     "won't": "will not",
     "wouldn't": "would not",
 }
-_NEGATION_TOKENS = frozenset({"cannot", "neither", "never", "no", "not", "without"})
+_NEGATION_TOKENS = frozenset(
+    {
+        "beyond",
+        "cannot",
+        "ineligible",
+        "neither",
+        "never",
+        "no",
+        "not",
+        "outside",
+        "without",
+    }
+)
 _NEGATION_WINDOW = 3
 
 

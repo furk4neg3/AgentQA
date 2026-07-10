@@ -51,6 +51,9 @@ class ScenarioService:
             updates["evaluation_spec"] = validate_evaluation_spec(updates["evaluation_spec"])
         for field, value in updates.items():
             setattr(scenario, field, value)
+        if scenario.source == "novacart_seed":
+            scenario.source = "user"
+            scenario.seed_version = None
         scenario.updated_at = datetime.now(UTC)
         self.db.commit()
         self.db.refresh(scenario)

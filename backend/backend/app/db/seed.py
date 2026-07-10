@@ -1,7 +1,25 @@
+from datetime import timedelta
+
 from sqlalchemy.orm import Session
 
 from app.models import AgentConfigModel, Order, PolicyDocument, Scenario
-from app.seed.data import DEFAULT_SYSTEM_PROMPT, ORDERS, POLICY_DOCUMENTS, SCENARIOS
+from app.seed.data import (
+    DEFAULT_SYSTEM_PROMPT,
+    EVALUATION_SPEC_VERSION,
+    ORDERS,
+    POLICY_DOCUMENTS,
+    SCENARIOS,
+)
+
+_MANAGED_SCENARIO_FIELDS = (
+    "name",
+    "input",
+    "expected_tools",
+    "must_not_include",
+    "expected_behavior",
+    "severity",
+    "evaluation_spec",
+)
 
 
 def seed_database(db: Session) -> None:
@@ -29,6 +47,13 @@ def seed_database(db: Session) -> None:
         )
         if existing_scenario is None:
             db.add(Scenario(source="novacart_seed", **scenario_payload))
+        elif _should_refresh_managed_scenario(existing_scenario, scenario_payload):
+            for field in _MANAGED_SCENARIO_FIELDS:
+                setattr(existing_scenario, field, scenario_payload[field])
+            existing_scenario.evaluation_spec_version = scenario_payload.get(
+                "evaluation_spec_version", EVALUATION_SPEC_VERSION
+            )
+            existing_scenario.seed_version = scenario_payload.get("seed_version")
         elif not existing_scenario.evaluation_spec and scenario_payload.get("evaluation_spec"):
             # Adopt the versioned spec for legacy seeded rows without overwriting
             # user-edited scenarios that already have one.
@@ -51,6 +76,24 @@ def seed_database(db: Session) -> None:
         )
 
     db.commit()
+
+
+def _should_refresh_managed_scenario(
+    existing: Scenario, scenario_payload: dict[str, object]
+) -> bool:
+    """Upgrade untouched built-in scenarios without overwriting user-owned copies."""
+
+    target_version = scenario_payload.get("seed_version")
+    if existing.source != "novacart_seed" or not isinstance(target_version, str):
+        return False
+    if existing.seed_version == target_version:
+        return False
+    if existing.seed_version is not None:
+        return True
+
+    # Legacy seed rows predate seed_version. Their creation and update timestamps
+    # are effectively identical; a later user edit creates a meaningful gap.
+    return abs(existing.updated_at - existing.created_at) <= timedelta(seconds=1)
 
 
 def init_db_and_seed() -> None:

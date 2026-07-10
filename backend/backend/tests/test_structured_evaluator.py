@@ -145,6 +145,60 @@ def test_negated_eligible_claim_is_not_treated_as_positive_eligible_claim() -> N
     assert evaluation.passed is True
 
 
+def test_refund_window_explanation_with_generic_policy_language_is_scored_correctly() -> None:
+    scenario = _seed_scenario("refund_after_30_days")
+    result = FakeRunResult(
+        input=scenario.input,
+        final_answer=(
+            "I have reviewed your request for a refund on order ORD-1002. According to our policy, "
+            "orders are eligible for a refund within 30 days of purchase. Since your order was placed "
+            "45 days ago, it is outside of the eligible window for an automatic refund. If you believe "
+            "there are extenuating circumstances, I can escalate this to a human support specialist for "
+            "further review."
+        ),
+        tool_calls=[
+            _tool("lookup_order", {"order_id": "ORD-1002"}),
+            _tool("check_refund_policy", {"order_id": "ORD-1002"}),
+        ],
+    )
+
+    evaluation = ScenarioEvaluator().evaluate(scenario, result)
+
+    required_behavior = next(
+        check for check in evaluation.checks if check.check_id == "required_behavioral_concepts"
+    )
+    forbidden_claims = next(
+        check for check in evaluation.checks if check.check_id == "forbidden_policy_claims"
+    )
+    assert required_behavior.passed is True
+    assert forbidden_claims.passed is True
+    assert evaluation.passed is True
+
+
+def test_generic_policy_language_does_not_replace_an_order_level_eligibility_decision() -> None:
+    scenario = _seed_scenario("refund_within_30_days")
+    result = FakeRunResult(
+        input=scenario.input,
+        final_answer=(
+            "ORD-1001 is a physical product and orders are eligible for refunds within 30 days. "
+            "However, your order is not eligible."
+        ),
+        tool_calls=[
+            _tool("lookup_order", {"order_id": "ORD-1001"}),
+            _tool("check_refund_policy", {"order_id": "ORD-1001"}),
+        ],
+    )
+
+    evaluation = ScenarioEvaluator().evaluate(scenario, result)
+
+    required_behavior = next(
+        check for check in evaluation.checks if check.check_id == "required_behavioral_concepts"
+    )
+    assert required_behavior.passed is False
+    assert "explained positive eligibility" in required_behavior.evidence
+    assert evaluation.policy_compliance < 1.0
+
+
 def _tool_contract_spec() -> EvaluationSpecification:
     return EvaluationSpecification.model_validate(
         {

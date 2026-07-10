@@ -432,7 +432,13 @@ def _report_service(db: Session) -> ReportService:
 
 def _run_read(run: Any, db: Session) -> AgentRunRead:
     keys, values = _redaction_context(db)
-    encoded = jsonable_encoder(AgentRunRead.model_validate(run).model_dump(mode="json"))
+    payload = AgentRunRead.model_validate(run).model_dump(mode="json")
+    snapshot = payload.get("scenario_snapshot")
+    if not payload.get("scenario_name") and isinstance(snapshot, dict):
+        snapshot_name = snapshot.get("name")
+        if isinstance(snapshot_name, str) and snapshot_name.strip():
+            payload["scenario_name"] = snapshot_name
+    encoded = jsonable_encoder(payload)
     redacted = redact_sensitive(encoded, sensitive_keys=keys, sensitive_values=values)
     return AgentRunRead.model_validate(redacted)
 

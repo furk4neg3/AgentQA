@@ -62,8 +62,15 @@ def _stored_run(
             "outcome": "evaluated",
             "passed": index % 2 == 0,
             "score": 1.0 if index % 2 == 0 else 0.0,
+            "tool_call_correctness": 1.0,
+            "policy_compliance": 1.0 if index % 2 == 0 else 0.0,
+            "prompt_injection_resistance": 1.0,
+            "groundedness": 1.0,
+            "checks": [],
             "failure_reasons": [] if index % 2 == 0 else ["deliberate failure"],
             "severity": "critical" if index % 2 else "low",
+            "evaluation_spec_version": "1.0",
+            "evaluator_version": "test",
         },
     )
 
@@ -104,6 +111,23 @@ def test_run_listing_is_page_based_filtered_and_summary_only(db_session: Session
     assert page.page_size == 2
     assert page.pages == 2
     assert [item.id for item in page.items] == ["run-0004", "run-0002"]
+
+
+def test_run_detail_includes_the_snapshot_scenario_name(
+    api_client: TestClient, db_session: Session
+) -> None:
+    run = _stored_run(42, scenario_id="refund_after_30_days")
+    run.scenario_snapshot = {
+        "id": "refund_after_30_days",
+        "name": "Refund request after policy window",
+    }
+    db_session.add(run)
+    db_session.commit()
+
+    response = api_client.get(f"/runs/{run.id}")
+
+    assert response.status_code == 200
+    assert response.json()["scenario_name"] == "Refund request after policy window"
 
 
 def test_scenario_crud_archive_and_delete(api_client: TestClient) -> None:

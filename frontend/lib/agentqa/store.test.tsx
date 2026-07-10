@@ -63,7 +63,10 @@ function Probe() {
   return (
     <div>
       <output aria-label="run count">{runs.length}</output>
+      <output aria-label="run order">{runs.map((run) => run.id).join(",")}</output>
+      <output aria-label="run name">{runs.find((run) => run.id === "run-1")?.scenario_name ?? "missing"}</output>
       <output aria-label="detail state">{current ? "loaded" : "summary-only"}</output>
+      <output aria-label="detail name">{current?.scenario_name ?? "missing"}</output>
       <output aria-label="detail error">{detailErrors["run-1"]?.kind ?? "none"}</output>
       <button type="button" onClick={() => void loadRunDetail("run-1").catch(() => undefined)}>
         Load detail
@@ -130,5 +133,41 @@ describe("AgentQA store", () => {
     await waitFor(() => expect(screen.getByLabelText("run count")).toHaveTextContent("1"))
     await user.click(screen.getByRole("button", { name: "Load detail" }))
     await waitFor(() => expect(screen.getByLabelText("detail error")).toHaveTextContent("provider"))
+  })
+
+  it("keeps the selected trace in place and preserves its scenario name", async () => {
+    const user = userEvent.setup()
+    const secondSummary: AgentRunSummary = {
+      ...summary,
+      id: "run-2",
+      scenario_id: "scenario-2",
+      scenario_name: "Scenario two",
+      started_at: "2026-07-10T09:59:00Z",
+    }
+    vi.mocked(api.listRuns).mockResolvedValue({
+      items: [secondSummary, summary],
+      total: 2,
+      page: 1,
+      page_size: 25,
+      pages: 1,
+    })
+    vi.mocked(api.getRun).mockResolvedValue({
+      ...detail,
+      scenario_name: null,
+    })
+
+    render(
+      <AgentQAProvider>
+        <Probe />
+      </AgentQAProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByLabelText("run order")).toHaveTextContent("run-2,run-1"))
+    await user.click(screen.getByRole("button", { name: "Load detail" }))
+    await waitFor(() => expect(screen.getByLabelText("detail state")).toHaveTextContent("loaded"))
+
+    expect(screen.getByLabelText("run order")).toHaveTextContent("run-2,run-1")
+    expect(screen.getByLabelText("run name")).toHaveTextContent("Scenario one")
+    expect(screen.getByLabelText("detail name")).toHaveTextContent("Scenario one")
   })
 })

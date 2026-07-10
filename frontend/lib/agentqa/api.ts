@@ -366,8 +366,11 @@ function normalizeRetrievedDocument(value: unknown): AgentRun["retrieved_documen
 
 export function normalizeRun(value: unknown): AgentRun {
   const raw = asRecord(value, "run detail")
+  const scenarioSnapshot = isRecord(raw.scenario_snapshot) ? raw.scenario_snapshot : {}
+  const summary = normalizeRunSummary(raw)
   return {
-    ...normalizeRunSummary(raw),
+    ...summary,
+    scenario_name: summary.scenario_name ?? nullableString(scenarioSnapshot.name),
     input: stringValue(raw.input ?? raw.input_preview),
     final_answer: stringValue(raw.final_answer),
     retrieved_documents: Array.isArray(raw.retrieved_documents)
