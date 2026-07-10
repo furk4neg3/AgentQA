@@ -82,9 +82,8 @@ export function TracesView({ focusRunId }: { focusRunId: string | null }) {
 
   useEffect(() => {
     if (!selectedId) return
-    const controller = new AbortController()
-    void loadRunDetail(selectedId, { signal: controller.signal }).catch(() => undefined)
-    return () => controller.abort()
+
+    void loadRunDetail(selectedId).catch(() => undefined)
   }, [loadRunDetail, selectedId])
 
   useEffect(() => {
