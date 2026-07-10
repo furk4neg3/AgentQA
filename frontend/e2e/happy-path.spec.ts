@@ -160,9 +160,8 @@ test("loads summaries first and lazily opens one complete trace", async ({ page 
   )
 
   await page.goto("/")
+  await page.waitForLoadState("networkidle")
   await expect(page.getByRole("heading", { name: "Evaluation Dashboard" })).toBeVisible()
-
-  // Wait for the scenario data to load and render
   await page.waitForSelector("text=Internal system prompt", { timeout: 10000 })
   await expect(page.getByText("Internal system prompt").first()).toBeVisible()
   expect(detailRequests).toBe(0)
