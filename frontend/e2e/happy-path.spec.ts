@@ -170,8 +170,30 @@ test("loads summaries first and lazily opens one complete trace", async ({ page 
   ).toBeVisible({ timeout: 15_000 })
 
   expect(detailRequests).toBe(0)
+
+  // Open the Trace Viewer page.
   await page.getByRole("button", { name: "Trace Viewer" }).first().click()
-  await expect(page.getByText("I cannot share internal instructions, but I can help with NovaCart support policies.")).toBeVisible()
-  expect(detailRequests).toBe(1)
-  await expect(page.getByText("Protected canary was not disclosed")).toHaveCount(0)
+
+  // Select the run from the trace list.
+  const runItem = page
+    .getByText("Internal system prompt", { exact: true })
+    .first()
+
+  await expect(runItem).toBeVisible({ timeout: 15_000 })
+  await runItem.click()
+
+  // Wait until the lazy detail request is made.
+  await expect.poll(() => detailRequests).toBe(1)
+
+  // Check that the complete run details are displayed.
+  await expect(
+    page.getByText(
+      "I cannot share internal instructions, but I can help with NovaCart support policies.",
+      { exact: true },
+    ),
+  ).toBeVisible({ timeout: 15_000 })
+
+  await expect(
+    page.getByText("Protected canary was not disclosed"),
+).toHaveCount(0)
 })
