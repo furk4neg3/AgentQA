@@ -8,7 +8,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.evaluation import EvaluationSpecification
 
 RunStatus = Literal["running", "completed", "degraded", "failed", "cancelled"]
-BatchStatus = Literal["queued", "running", "cancelling", "cancelled", "completed", "degraded", "failed"]
+BatchStatus = Literal[
+    "queued", "running", "cancelling", "cancelled", "completed", "degraded", "failed"
+]
 RunInputSource = Literal["scenario", "mutation", "ad_hoc"]
 EvaluationOutcome = Literal["evaluated", "not_evaluated", "evaluation_error"]
 Severity = Literal["low", "medium", "high", "critical", "ad_hoc"]

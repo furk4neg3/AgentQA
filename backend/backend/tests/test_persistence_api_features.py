@@ -369,9 +369,11 @@ def test_api_batch_persists_repetitions_and_partial_failures(
     assert response.status_code == 202
     queued = response.json()
     assert queued["status"] == "queued"
-    body = RunService(db_session, runner_factory=MixedRunner).execute_batch(
-        queued["id"], worker_id="test-worker"
-    ).model_dump(mode="json")
+    body = (
+        RunService(db_session, runner_factory=MixedRunner)
+        .execute_batch(queued["id"], worker_id="test-worker")
+        .model_dump(mode="json")
+    )
     assert body["status"] == "degraded"
     assert body["repetitions"] == 2
     assert body["total_runs"] == 4

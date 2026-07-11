@@ -641,7 +641,6 @@ class RunService:
         self.db.commit()
         return self._get_batch_model(batch_id)
 
-
     def _finalize_cancelled_batch(self, batch_id: str) -> BatchRun:
         batch = self._get_batch_model(batch_id)
         processed = batch.completed_runs + batch.failed_runs + batch.degraded_runs

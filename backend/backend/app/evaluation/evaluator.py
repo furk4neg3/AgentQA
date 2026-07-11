@@ -459,9 +459,7 @@ def _check_result(
     )
 
 
-def _dimension_score(
-    checks: list[EvaluationCheckResult], dimension: Dimension
-) -> float | None:
+def _dimension_score(checks: list[EvaluationCheckResult], dimension: Dimension) -> float | None:
     dimension_checks = [check for check in checks if check.dimension == dimension]
     if not dimension_checks:
         return None
