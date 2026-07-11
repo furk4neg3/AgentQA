@@ -173,7 +173,7 @@ def create_run(payload: RunCreate, db: Session = Depends(get_db)) -> AgentRunRea
 
 
 @router.post("/runs/batch", response_model=BatchRunResponse, status_code=status.HTTP_201_CREATED)
-@router.post("/batches", response_model=BatchRunResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/batches", response_model=BatchRunResponse, status_code=status.HTTP_202_ACCEPTED)
 def create_batch_run(payload: BatchRunCreate, db: Session = Depends(get_db)) -> BatchRunResponse:
     try:
         return _run_service(db).run_batch(

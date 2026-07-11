@@ -189,6 +189,15 @@ class EvaluationSpecification(SpecificationModel):
         check_ids = [check.check_id for check in self.checks]
         if len(check_ids) != len(set(check_ids)):
             raise ValueError("Evaluation check IDs must be unique")
+        active_dimensions = {check.dimension for check in self.checks}
+        positive_active_weight = sum(
+            float(getattr(self.dimension_weights, dimension))
+            for dimension in active_dimensions
+        )
+        if positive_active_weight <= 0:
+            raise ValueError(
+                "At least one dimension containing a check must have a positive weight"
+            )
         return self
 
 

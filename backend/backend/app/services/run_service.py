@@ -242,6 +242,7 @@ class RunService:
         repetitions: int = 1,
         baseline_batch_id: str | None = None,
     ) -> BatchRunResponse:
+        """Persist a queued batch and return immediately."""
         if repetitions < 1 or repetitions > 20:
             raise ValueError("repetitions must be between 1 and 20")
         scenarios = self._batch_scenarios(scenario_ids=scenario_ids, suite_id=suite_id)
@@ -249,11 +250,11 @@ class RunService:
         baseline = self._get_batch_model(resolved_baseline_id) if resolved_baseline_id else None
         baseline_by_scenario = _aggregate_by_scenario(baseline.runs) if baseline else {}
         config = self.config_service.get_default()
-        started_at = datetime.now(UTC)
+        now = datetime.now(UTC)
         batch = BatchRun(
             id=str(uuid.uuid4()),
             suite_id=suite_id,
-            status="running",
+            status="queued",
             repetitions=repetitions,
             total_runs=len(scenarios) * repetitions,
             configuration_snapshot={
@@ -270,25 +271,54 @@ class RunService:
             selected_scenarios_snapshot=[
                 _scenario_snapshot(item, item.input, "scenario") for item in scenarios
             ],
-            created_at=started_at,
-            started_at=started_at,
+            created_at=now,
+            queued_at=now,
         )
         self.db.add(batch)
         self.db.commit()
+        return to_batch_response(batch)
 
-        for repetition_index in range(repetitions):
-            for scenario in scenarios:
+    def execute_batch(self, batch_id: str, *, worker_id: str) -> BatchRunResponse:
+        batch = self._get_batch_model(batch_id)
+        if batch.status == "cancelled":
+            return to_batch_response(batch)
+        if batch.status not in {"queued", "running", "cancelling"}:
+            return to_batch_response(batch)
+        if batch.status == "queued":
+            batch.status = "running"
+            batch.started_at = datetime.now(UTC)
+        batch.worker_id = worker_id
+        batch.last_heartbeat_at = datetime.now(UTC)
+        self.db.commit()
+        config = self.config_service.get_default()
+        snapshots = list(batch.selected_scenarios_snapshot)
+        for repetition_index in range(batch.repetitions):
+            for snapshot in snapshots:
+                self.db.refresh(batch)
+                if batch.status in {"cancelling", "cancelled"}:
+                    return to_batch_response(self._finalize_cancelled_batch(batch.id))
+                scenario_id = str(snapshot.get("id") or "")
+                already = (
+                    self.db.query(AgentRun)
+                    .filter(
+                        AgentRun.batch_id == batch.id,
+                        AgentRun.scenario_id == scenario_id,
+                        AgentRun.repetition_index == repetition_index,
+                    )
+                    .first()
+                )
+                if already is not None:
+                    continue
                 self.run_once(
-                    scenario_id=scenario.id,
+                    scenario_id=scenario_id,
                     mode="scenario",
                     batch_id=batch.id,
                     repetition_index=repetition_index,
                     config_override=config,
                 )
+                batch.last_heartbeat_at = datetime.now(UTC)
                 self._refresh_batch_progress(batch.id)
-
-        batch = self._finalize_batch(batch.id)
-        return to_batch_response(batch)
+        return to_batch_response(self._finalize_batch(batch.id))
 
     def list_runs(
         self,
@@ -406,10 +436,16 @@ class RunService:
 
     def cancel_batch(self, batch_id: str) -> BatchRunResponse:
         batch = self._get_batch_model(batch_id)
-        if batch.status != "running":
-            raise ValueError("Only a running batch can be cancelled")
-        batch.status = "cancelled"
-        batch.finished_at = datetime.now(UTC)
+        if batch.status in {"cancelled", "cancelling"}:
+            return to_batch_response(batch)
+        if batch.status == "queued":
+            batch.status = "cancelled"
+            batch.cancelled_runs = batch.total_runs
+            batch.finished_at = datetime.now(UTC)
+        elif batch.status == "running":
+            batch.status = "cancelling"
+        else:
+            raise ValueError("Batch is already terminal and cannot be cancelled")
         self.db.commit()
         return to_batch_response(batch)
 
@@ -573,10 +609,13 @@ class RunService:
         batch.completed_runs = int(counts.get("completed", 0))
         batch.failed_runs = int(counts.get("failed", 0))
         batch.degraded_runs = int(counts.get("degraded", 0))
+        batch.cancelled_runs = int(counts.get("cancelled", 0))
         self.db.commit()
 
     def _finalize_batch(self, batch_id: str) -> BatchRun:
         batch = self._get_batch_model(batch_id)
+        if batch.status in {"cancelling", "cancelled"}:
+            return self._finalize_cancelled_batch(batch_id)
         if batch.failed_runs == batch.total_runs and batch.total_runs > 0:
             batch.status = "failed"
         elif batch.failed_runs or batch.degraded_runs:
@@ -598,6 +637,21 @@ class RunService:
             "not_evaluated_runs": sum(run.evaluation_outcome != "evaluated" for run in batch.runs),
             "failed_runs": batch.failed_runs,
             "degraded_runs": batch.degraded_runs,
+        }
+        self.db.commit()
+        return self._get_batch_model(batch_id)
+
+
+    def _finalize_cancelled_batch(self, batch_id: str) -> BatchRun:
+        batch = self._get_batch_model(batch_id)
+        processed = batch.completed_runs + batch.failed_runs + batch.degraded_runs
+        batch.cancelled_runs = max(batch.cancelled_runs, batch.total_runs - processed)
+        batch.status = "cancelled"
+        batch.finished_at = datetime.now(UTC)
+        batch.aggregate_result = {
+            "average_score": _average_scores(batch.runs),
+            "pass_rate": _pass_rate(batch.runs),
+            "cancelled_runs": batch.cancelled_runs,
         }
         self.db.commit()
         return self._get_batch_model(batch_id)
@@ -787,7 +841,7 @@ def to_batch_response(batch: BatchRun) -> BatchRunResponse:
     return BatchRunResponse(
         id=batch.id,
         suite_id=batch.suite_id,
-        status=_normalized_status(batch.status),
+        status=batch.status,
         run_ids=[run.id for run in runs],
         results=[to_run_list_item(run, baseline_scores) for run in runs],
         average_score=average_score,
@@ -797,6 +851,12 @@ def to_batch_response(batch: BatchRun) -> BatchRunResponse:
         completed_runs=batch.completed_runs,
         failed_runs=batch.failed_runs,
         degraded_runs=batch.degraded_runs,
+        cancelled_runs=batch.cancelled_runs,
+        queued_at=batch.queued_at,
+        last_heartbeat_at=batch.last_heartbeat_at,
+        worker_id=batch.worker_id,
+        failure_reason=batch.failure_reason,
+        retry_count=batch.retry_count,
         aggregate_result=batch.aggregate_result,
         configuration_snapshot=batch.configuration_snapshot,
         selected_scenarios_snapshot=batch.selected_scenarios_snapshot,

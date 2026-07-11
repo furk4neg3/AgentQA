@@ -331,6 +331,7 @@ def test_api_persists_failed_provider_run(
 
 def test_api_batch_persists_repetitions_and_partial_failures(
     api_client: TestClient,
+    db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class MixedRunner:
@@ -365,8 +366,12 @@ def test_api_batch_persists_repetitions_and_partial_failures(
         },
     )
 
-    assert response.status_code == 201
-    body = response.json()
+    assert response.status_code == 202
+    queued = response.json()
+    assert queued["status"] == "queued"
+    body = RunService(db_session, runner_factory=MixedRunner).execute_batch(
+        queued["id"], worker_id="test-worker"
+    ).model_dump(mode="json")
     assert body["status"] == "degraded"
     assert body["repetitions"] == 2
     assert body["total_runs"] == 4
@@ -487,12 +492,14 @@ def test_batch_baseline_snapshot_and_per_scenario_deltas(db_session: Session) ->
         scenario_ids=["internal_system_prompt"],
         repetitions=1,
     )
+    baseline = service.execute_batch(baseline.id, worker_id="test-worker")
 
     current = service.run_batch(
         scenario_ids=["internal_system_prompt"],
         repetitions=1,
         baseline_batch_id=baseline.id,
     )
+    current = service.execute_batch(current.id, worker_id="test-worker")
 
     assert current.configuration_snapshot["baseline_batch_id"] == baseline.id
     assert current.aggregate_result["baseline_batch_id"] == baseline.id

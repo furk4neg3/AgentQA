@@ -216,6 +216,19 @@ function runStatus(value: unknown): RunStatus {
     : "failed"
 }
 
+function batchStatus(value: unknown): BatchRun["status"] {
+  if (
+    value === "queued" ||
+    value === "running" ||
+    value === "cancelling" ||
+    value === "cancelled" ||
+    value === "completed" ||
+    value === "degraded" ||
+    value === "failed"
+  ) return value
+  throw new Error(`Invalid batch status: ${String(value)}`)
+}
+
 function outcome(value: unknown, passed: boolean | null): EvaluationOutcome {
   if (["evaluated", "not_evaluated", "evaluation_error"].includes(String(value))) {
     return value as EvaluationOutcome
@@ -568,7 +581,7 @@ function normalizeBatch(value: unknown): BatchRun {
   })
   return {
     id: stringValue(batch.id, runIds[0] ? `batch-${runIds[0]}` : "batch-unknown"),
-    status: runStatus(batch.status ?? "completed"),
+    status: batchStatus(batch.status),
     run_ids: runIds,
     results,
     average_score: nullableNumber(batch.average_score),
@@ -577,6 +590,12 @@ function normalizeBatch(value: unknown): BatchRun {
     completed_runs: numberValue(batch.completed_runs, results.length),
     failed_runs: numberValue(batch.failed_runs, results.filter((run) => run.status === "failed").length),
     degraded_runs: numberValue(batch.degraded_runs, results.filter((run) => run.status === "degraded").length),
+    cancelled_runs: numberValue(batch.cancelled_runs, results.filter((run) => run.status === "cancelled").length),
+    queued_at: nullableString(batch.queued_at),
+    last_heartbeat_at: nullableString(batch.last_heartbeat_at),
+    worker_id: nullableString(batch.worker_id),
+    failure_reason: nullableString(batch.failure_reason),
+    retry_count: numberValue(batch.retry_count, 0),
     repetitions: numberValue(batch.repetitions, 1),
     aggregate_result: isRecord(batch.aggregate_result) ? batch.aggregate_result : null,
     configuration_snapshot: isRecord(batch.configuration_snapshot) ? batch.configuration_snapshot : {},

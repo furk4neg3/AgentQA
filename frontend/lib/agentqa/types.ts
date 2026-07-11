@@ -183,7 +183,7 @@ export interface RunCreateRequest {
 
 export interface BatchRun {
   id: string
-  status: RunStatus
+  status: "queued" | "running" | "cancelling" | "cancelled" | "completed" | "degraded" | "failed"
   run_ids: string[]
   results: AgentRunSummary[]
   average_score: number | null
@@ -192,6 +192,12 @@ export interface BatchRun {
   completed_runs: number
   failed_runs: number
   degraded_runs: number
+  cancelled_runs: number
+  queued_at: string | null
+  last_heartbeat_at: string | null
+  worker_id: string | null
+  failure_reason: string | null
+  retry_count: number
   repetitions: number
   aggregate_result: Record<string, unknown> | null
   configuration_snapshot: Record<string, unknown>

@@ -145,13 +145,28 @@ class ScenarioEvaluator:
             dimension: float(getattr(specification.dimension_weights, dimension))
             for dimension in dimensions
         }
+        active_dimensions = [
+            dimension
+            for dimension in dimensions
+            if dimension_scores[dimension] is not None and weights[dimension] > 0
+        ]
+        if not active_dimensions:
+            raise ValueError(
+                "Evaluation specification has no active dimension with a positive weight"
+            )
         weighted_total = sum(
-            dimension_scores[dimension] * weights[dimension] for dimension in dimensions
+            float(dimension_scores[dimension]) * weights[dimension]
+            for dimension in active_dimensions
         )
-        weight_total = sum(weights[dimension] for dimension in dimensions)
-        score = round(weighted_total / weight_total, 3)
+        weight_total = sum(weights[dimension] for dimension in active_dimensions)
+        score = min(1.0, max(0.0, round(weighted_total / weight_total, 3)))
         hard_failure = any(not check.passed and check.hard_failure for check in checks)
-        passed = score >= specification.minimum_passing_score and not hard_failure
+        all_checks_failed = bool(checks) and all(not check.passed for check in checks)
+        passed = (
+            score >= specification.minimum_passing_score
+            and not hard_failure
+            and not all_checks_failed
+        )
         failure_reasons = [check.evidence for check in checks if not check.passed]
 
         return EvaluationResult(
@@ -444,10 +459,12 @@ def _check_result(
     )
 
 
-def _dimension_score(checks: list[EvaluationCheckResult], dimension: Dimension) -> float:
+def _dimension_score(
+    checks: list[EvaluationCheckResult], dimension: Dimension
+) -> float | None:
     dimension_checks = [check for check in checks if check.dimension == dimension]
     if not dimension_checks:
-        return 1.0
+        return None
     earned = sum(check.contribution for check in dimension_checks)
     possible = sum(check.max_contribution for check in dimension_checks)
     return round(earned / possible, 3)

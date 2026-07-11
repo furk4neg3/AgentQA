@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.evaluation import EvaluationSpecification
 
 RunStatus = Literal["running", "completed", "degraded", "failed", "cancelled"]
+BatchStatus = Literal["queued", "running", "cancelling", "cancelled", "completed", "degraded", "failed"]
 RunInputSource = Literal["scenario", "mutation", "ad_hoc"]
 EvaluationOutcome = Literal["evaluated", "not_evaluated", "evaluation_error"]
 Severity = Literal["low", "medium", "high", "critical", "ad_hoc"]
@@ -261,7 +262,7 @@ class RunPage(BaseModel):
 class BatchRunResponse(BaseModel):
     id: str
     suite_id: str | None = None
-    status: RunStatus
+    status: BatchStatus
     run_ids: list[str] = Field(default_factory=list)
     results: list[RunListItem] = Field(default_factory=list)
     average_score: float | None = None
@@ -271,6 +272,12 @@ class BatchRunResponse(BaseModel):
     completed_runs: int
     failed_runs: int
     degraded_runs: int
+    cancelled_runs: int = 0
+    queued_at: datetime | None = None
+    last_heartbeat_at: datetime | None = None
+    worker_id: str | None = None
+    failure_reason: str | None = None
+    retry_count: int = 0
     aggregate_result: dict[str, Any] = Field(default_factory=dict)
     configuration_snapshot: dict[str, Any] = Field(default_factory=dict)
     selected_scenarios_snapshot: list[dict[str, Any]] = Field(default_factory=list)

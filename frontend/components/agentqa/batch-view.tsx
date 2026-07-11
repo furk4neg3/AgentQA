@@ -98,7 +98,12 @@ export function BatchView({ onOpenTrace }: { onOpenTrace: (id: string) => void }
 
   const passed = batch?.results.filter((run) => run.evaluation_result.passed === true).length ?? 0
   const evaluatedFailed = batch?.results.filter((run) => run.evaluation_result.passed === false).length ?? 0
-  const progress = batch?.total_runs ? Math.round((batch.completed_runs / batch.total_runs) * 100) : 0
+  const processedRuns = batch
+    ? batch.completed_runs + batch.degraded_runs + batch.failed_runs + batch.cancelled_runs
+    : 0
+  const progress = batch?.total_runs
+    ? Math.min(100, Math.round((processedRuns / batch.total_runs) * 100))
+    : 0
 
   return (
     <div className="flex flex-col gap-6">
@@ -196,7 +201,7 @@ export function BatchView({ onOpenTrace }: { onOpenTrace: (id: string) => void }
             <CardContent className="flex flex-col gap-3 p-4">
               <div className="flex items-center justify-between text-sm">
                 <span className="font-medium">Batch {batch.id}</span>
-                <span className="font-mono text-muted-foreground">{batch.completed_runs} / {batch.total_runs} runs</span>
+                <span className="font-mono text-muted-foreground">{processedRuns} / {batch.total_runs} processed</span>
               </div>
               <div
                 role="progressbar"
