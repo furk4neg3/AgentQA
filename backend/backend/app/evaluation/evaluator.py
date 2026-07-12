@@ -145,20 +145,20 @@ class ScenarioEvaluator:
             dimension: float(getattr(specification.dimension_weights, dimension))
             for dimension in dimensions
         }
-        active_dimensions = [
-            dimension
-            for dimension in dimensions
-            if dimension_scores[dimension] is not None and weights[dimension] > 0
-        ]
-        if not active_dimensions:
+        weighted_total = 0.0
+        weight_total = 0.0
+        for dimension in dimensions:
+            dimension_score = dimension_scores[dimension]
+            dimension_weight = weights[dimension]
+            if dimension_score is None or dimension_weight <= 0:
+                continue
+            weighted_total += dimension_score * dimension_weight
+            weight_total += dimension_weight
+
+        if weight_total <= 0:
             raise ValueError(
                 "Evaluation specification has no active dimension with a positive weight"
             )
-        weighted_total = sum(
-            float(dimension_scores[dimension]) * weights[dimension]
-            for dimension in active_dimensions
-        )
-        weight_total = sum(weights[dimension] for dimension in active_dimensions)
         score = min(1.0, max(0.0, round(weighted_total / weight_total, 3)))
         hard_failure = any(not check.passed and check.hard_failure for check in checks)
         all_checks_failed = bool(checks) and all(not check.passed for check in checks)
